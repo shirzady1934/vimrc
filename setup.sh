@@ -65,5 +65,4 @@ echo
 echo "All set! Open Vim and check:"
 echo "  :echo exists(':YcmRestartServer')   (should be 2)"
 echo "  :ALEInfo                             (should list active linters)"
-echo "Toggle NERDTree with Ctrl-n. Enjoy 🎉"
 
