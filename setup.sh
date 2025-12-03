@@ -34,14 +34,10 @@ vim +PluginInstall +qall || true
 
 echo "==> Building YouCompleteMe with Vim's Python..."
 # Get Vim's python executable if possible; fallback to /usr/bin/python3
-VIM_PY=$(/usr/bin/vim -Nu NONE -n --cmd 'silent! py3 import sys;print(sys.executable)' +q 2>/dev/null | tail -1 || true)
-[ -z "$VIM_PY" ] && VIM_PY=/usr/bin/python3
-echo "Using Python: $VIM_PY"
-
 cd "$HOME/.vim/bundle/YouCompleteMe"
 git submodule update --init --recursive
 git clean -xfd
-"$VIM_PY" install.py --all
+python  install.py --all
 
 echo "==> Installing Go tools (gopls, goimports, staticcheck)..."
 if command -v go >/dev/null 2>&1; then
