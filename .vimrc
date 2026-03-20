@@ -23,6 +23,13 @@ Plugin 'fatih/vim-go'
 Plugin 'SirVer/ultisnips'
 Plugin 'honza/vim-snippets'
 
+" YAML / Kubernetes
+Plugin 'stephpy/vim-yaml'
+Plugin 'andrewstuart/vim-kubernetes'
+
+" Docker (Dockerfile + docker-compose)
+Plugin 'ekalinin/Dockerfile.vim'
+
 call vundle#end()
 filetype plugin indent on
 
@@ -91,25 +98,105 @@ let g:ale_linters_explicit = 1
 let g:ale_lint_on_text_changed = 'never'
 let g:ale_lint_on_insert_leave = 0
 let g:ale_lint_on_save = 1
-let g:ale_lint_on_save = 0
 let g:ale_lint_on_enter = 0
 let g:ale_open_list = 1
 let g:ale_keep_list_window_open = 0
 
 let g:ale_linters = {
-\ 'python': ['flake8'],
-\ 'go':     ['gopls', 'staticcheck', 'govet'],
+\ 'python':     ['flake8'],
+\ 'go':         ['gopls', 'staticcheck', 'govet'],
+\ 'yaml':       ['yamllint'],
+\ 'sh':         ['shellcheck'],
+\ 'bash':       ['shellcheck'],
+\ 'zsh':        ['shellcheck'],
+\ 'dockerfile': ['hadolint'],
 \}
 let g:ale_fixers = {
-\ 'python': ['black', 'isort'],
-\ 'go':     ['gofmt', 'goimports'],
-\ '*':      ['trim_whitespace', 'remove_trailing_lines'],
+\ 'python':     ['black', 'isort'],
+\ 'go':         ['gofmt', 'goimports'],
+\ 'sh':         ['shfmt'],
+\ 'bash':       ['shfmt'],
+\ 'yaml':       ['trim_whitespace', 'remove_trailing_lines'],
+\ '*':          ['trim_whitespace', 'remove_trailing_lines'],
 \}
 
 let g:ale_sign_error = '✗'
 let g:ale_sign_warning = '!'
 
+" shfmt: indent with 4 spaces, follow Google shell style
+let g:ale_sh_shfmt_options = '-i 4 -bn -ci'
+
 highlight clear SignColumn
+
+" ---------------------------------
+" YAML / Kubernetes
+" ---------------------------------
+" 2-space indent — K8s/YAML standard
+augroup yaml_indent
+  autocmd!
+  autocmd FileType yaml setlocal tabstop=2 shiftwidth=2 softtabstop=2 expandtab
+augroup END
+
+" Detect Kubernetes manifests (apiVersion: / kind: present) and enable
+" kubeconform linting only for those files.
+function! s:DetectKubernetes() abort
+  if search('\v^apiVersion:\s', 'nw') > 0 && search('\v^kind:\s', 'nw') > 0
+    let b:ale_linters = ['yamllint', 'kubeconform']
+  endif
+endfunction
+
+augroup kubernetes_detect
+  autocmd!
+  autocmd BufRead,BufNewFile *.yaml,*.yml call s:DetectKubernetes()
+augroup END
+
+" K8s keybindings (only inside YAML buffers that look like manifests)
+augroup kubernetes_keys
+  autocmd!
+  " <leader>ka  — kubectl apply current file
+  autocmd FileType yaml nnoremap <buffer> <leader>ka
+        \ :w<CR>:!kubectl apply -f %<CR>
+  " <leader>kd  — kubectl delete current file
+  autocmd FileType yaml nnoremap <buffer> <leader>kd
+        \ :w<CR>:!kubectl delete -f %<CR>
+  " <leader>kD  — kubectl dry-run (server) current file
+  autocmd FileType yaml nnoremap <buffer> <leader>kD
+        \ :w<CR>:!kubectl apply --dry-run=server -f %<CR>
+  " <leader>kv  — validate with kubeconform
+  autocmd FileType yaml nnoremap <buffer> <leader>kv
+        \ :w<CR>:!kubeconform -strict -summary %<CR>
+  " <leader>ke  — kubectl explain word under cursor
+  autocmd FileType yaml nnoremap <buffer> <leader>ke
+        \ :!kubectl explain <cword><CR>
+augroup END
+
+" ---------------------------------
+" Docker / docker-compose
+" ---------------------------------
+augroup docker_ft
+  autocmd!
+  " Treat docker-compose*.yml as YAML (inherits 2-space indent)
+  autocmd BufRead,BufNewFile docker-compose*.yml setlocal filetype=yaml
+  autocmd BufRead,BufNewFile docker-compose*.yaml setlocal filetype=yaml
+  " Dockerfile variants
+  autocmd BufRead,BufNewFile Dockerfile*,*.dockerfile setlocal filetype=dockerfile
+augroup END
+
+" ---------------------------------
+" Shell scripts
+" ---------------------------------
+augroup shell_ft
+  autocmd!
+  " Ensure *.sh files are treated as sh (shellcheck works on sh/bash)
+  autocmd BufRead,BufNewFile *.sh setlocal filetype=sh
+  autocmd BufRead,BufNewFile *.bash setlocal filetype=bash
+  " <leader>sr  — run current shell script
+  autocmd FileType sh,bash nnoremap <buffer> <leader>sr
+        \ :w<CR>:!bash %<CR>
+  " <leader>sc  — shellcheck current file (explicit, without ALE)
+  autocmd FileType sh,bash nnoremap <buffer> <leader>sc
+        \ :w<CR>:!shellcheck %<CR>
+augroup END
 
 " ---------------------------------
 " Go setup (vim-go + gopls)
@@ -117,7 +204,7 @@ highlight clear SignColumn
 let g:go_def_mapping_enabled = 0
 let g:go_gopls_enabled = 1
 let g:go_code_completion_enabled = 0
-let g:go_imports_autosave = 
+let g:go_imports_autosave = 1
 let g:go_fmt_command = 'goimports'
 let g:go_doc_popup_window = 1
 let g:go_echo_go_info = 0
@@ -178,4 +265,3 @@ augroup END
 " No colors; keep separators plain
 highlight StatusLine   cterm=NONE ctermfg=NONE ctermbg=NONE
 highlight StatusLineNC cterm=NONE ctermfg=NONE ctermbg=NONE
-
