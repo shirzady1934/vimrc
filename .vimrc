@@ -81,6 +81,19 @@ endif
 let g:ycm_confirm_extra_conf = 0
 let g:ycm_show_diagnostics_ui = 0
 let g:ycm_filetype_whitelist = { '*': 1 }
+let g:ycm_auto_hover = ''
+
+function! s:ScrollGoDocPopup(down) abort
+  let l:wins = popup_list()
+  if empty(l:wins) | return "\<C-" . (a:down ? 'd' : 'u') . ">" | endif
+  let l:id = l:wins[0]
+  let l:pos = popup_getpos(l:id)
+  call popup_setoptions(l:id, {'firstline': max([1, l:pos.firstline + (a:down ? 3 : -3)])})
+  return ''
+endfunction
+
+nnoremap <expr> <C-d> <SID>ScrollGoDocPopup(1)
+nnoremap <expr> <C-u> <SID>ScrollGoDocPopup(0)
 
 " gopls via YCM (Go)
 let g:ycm_language_server = [
