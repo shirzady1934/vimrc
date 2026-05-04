@@ -230,6 +230,16 @@ augroup go_keys
 augroup END
 
 " ---------------------------------
+" Python (YCM-based)
+" ---------------------------------
+augroup python_keys
+  autocmd!
+  autocmd FileType python nnoremap <buffer> gd :YcmCompleter GoTo<CR>
+  autocmd FileType python nnoremap <buffer> gr :YcmCompleter GoToReferences<CR>
+  autocmd FileType python nnoremap <buffer> K  :YcmCompleter GetDoc<CR>
+augroup END
+
+" ---------------------------------
 " Python host (optional, if using pyenv)
 " ---------------------------------
 if executable('pyenv')
