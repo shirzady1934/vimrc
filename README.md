@@ -1,114 +1,160 @@
 # My Vim Configuration
 
-This repository contains a complete and structured `.vimrc` setup optimized for productivity in Go, Python, and general development. It uses Vundle as the plugin manager and includes enhanced navigation, autocompletion, linting, folding, and editor usability features.
+A structured `.vimrc` tuned for Go, Python, shell, Docker, and Kubernetes
+work. vim-plug is the plugin manager; YouCompleteMe (with gopls) handles
+completion; ALE handles linting and formatting on save.
 
 ---
 
-## Key Features
+## Features
 
-### Plugin Management
-- Uses Vundle for plugin installation and dependency handling.
-- Plugins organized by functionality.
+### Plugin management
+- [vim-plug](https://github.com/junegunn/vim-plug) — parallel installs,
+  lazy-loading, and auto-bootstrap on first launch.
+- Plugins grouped by purpose in `.vimrc`.
+- Lazy-loaded: NERDTree (on command), ctrlp (on command), vim-go (only
+  in Go buffers), vim-yaml + vim-kubernetes (only in YAML buffers).
 
-### Navigation and UI Enhancements
-- NERDTree file explorer with auto-open on startup when no file is provided.
-- ctrlp for project-wide fuzzy search.
-- vim-anyfold for smarter and deeper folding behavior.
+### Navigation and UI
+- NERDTree — file tree, auto-opens on bare `vim`.
+- ctrlp — project-wide fuzzy file finder.
+- vim-anyfold — indent-based folding for all filetypes.
 
-### Completion and Language Intelligence
-- YouCompleteMe (YCM) for semantic autocompletion.
-- Integrated gopls LSP backend for Go development.
-- Improved completion menu interaction:
-  - Tab and Shift+Tab cycle through completion items.
-  - Enter confirms or inserts newline depending on selection state.
+### Completion and language intelligence
+- YouCompleteMe with gopls LSP for Go.
+- `<Tab>` / `<S-Tab>` cycle the completion menu.
+- `<CR>` confirms the highlighted candidate or inserts newline.
 
-### Linting and Code Quality
-- ALE configured to lint only on save, with full control over which linters to run.
-- Python linters and formatters: flake8, black, isort.
-- Go linters and formatters: gopls, staticcheck, govet, gofmt, goimports.
-- Global fixers for whitespace trimming.
-- Custom symbols for error and warning indicators.
+### Linting and formatting (ALE, on save)
+| Filetype | Linters | Fixers |
+|---|---|---|
+| Python | flake8 | black, isort |
+| Go | gopls, staticcheck, govet | gofmt, goimports |
+| Shell (sh / bash / zsh) | shellcheck | shfmt (`-i 4 -bn -ci`) |
+| YAML | yamllint | trim whitespace |
+| Kubernetes YAML | yamllint + kubeconform | — |
+| Dockerfile | hadolint | — |
 
-### Snippet Engine
-- UltiSnips and vim-snippets included.
-- Key triggers:
-  - Expand: Ctrl+J
-  - Jump forward: Ctrl+J
-  - Jump backward: Ctrl+K
+### Snippets
+- UltiSnips + vim-snippets.
+- Expand / jump: `<C-j>` forward, `<C-k>` back (Tab is reserved for completion).
 
-### Go Development Setup
-- vim-go integrated with minimal overlap with YCM.
-- goimports used as the default formatter.
-- Popup documentation enabled.
-- Keybindings:
-  - gd for definition
-  - gr for references
-  - K for documentation lookup
+### Editor quality of life
+- 4-space indent, line numbers, UTF-8, ruler.
+- 2-space indent auto-applied to YAML.
+- `termguicolors` when supported.
+- Resize splits with `Ctrl + Arrow keys`.
+- Persistent undo, mouse, system clipboard, smart search.
+- Statusline-based dashed window separators.
 
-### Python Integration
-- Optional pyenv autodetection to set python3 provider dynamically.
+---
 
-### Editor Quality of Life
-- Four-space indentation, expand tabs, line numbers, UTF-8, ruler.
-- termguicolors enabled when supported.
-- Split resizing via:
-  - Ctrl + Up/Down/Left/Right arrows.
-- Smarter statusline-based window separators for cleaner layout.
+## Keybindings
+
+Default `<leader>` is `<Space>`.
+
+### Kubernetes (any `.yaml` / `.yml` buffer)
+| Key | Action |
+|---|---|
+| `<leader>ka` | `kubectl apply -f %` |
+| `<leader>kd` | `kubectl delete -f %` |
+| `<leader>kD` | `kubectl apply --dry-run=server -f %` |
+| `<leader>kv` | `kubeconform -strict -summary %` |
+| `<leader>ke` | `kubectl explain <word-under-cursor>` |
+
+### Shell (`.sh` / `.bash`)
+| Key | Action |
+|---|---|
+| `<leader>sr` | run script with bash |
+| `<leader>sc` | `shellcheck %` |
+
+### Go (`.go`)
+| Key | Action |
+|---|---|
+| `gd` | go to definition (`vim-go`) |
+| `gr` | find references |
+| `K` | doc lookup (popup) |
+| `<C-d>` / `<C-u>` | scroll doc popup |
+
+### Python (`.py`, via YCM)
+| Key | Action |
+|---|---|
+| `gd` | `YcmCompleter GoTo` |
+| `gr` | `YcmCompleter GoToReferences` |
+| `K` | `YcmCompleter GetDoc` |
+
+### Splits / windows
+| Key | Action |
+|---|---|
+| `<C-n>` | toggle NERDTree |
+| `<C-Up>` / `<C-Down>` | shrink / grow horizontal |
+| `<C-Left>` / `<C-Right>` | shrink / grow vertical |
+
+---
+
+## Plugin list
+
+| Category | Plugins | Lazy |
+|---|---|---|
+| UI / Navigation | preservim/nerdtree | on command |
+|                 | kien/ctrlp.vim | on command |
+|                 | pseewald/vim-anyfold | eager |
+| Completion / Linting | ycm-core/YouCompleteMe | eager |
+|                      | dense-analysis/ale | eager |
+| Languages | fatih/vim-go | `for: go` |
+|           | stephpy/vim-yaml | `for: yaml` |
+|           | andrewstuart/vim-kubernetes | `for: yaml` |
+|           | ekalinin/Dockerfile.vim | eager |
+| Snippets | SirVer/ultisnips, honza/vim-snippets | eager |
 
 ---
 
 ## Installation
 
-### 1. Install Vundle
 ```sh
-git clone https://github.com/VundleVim/Vundle.vim.git ~/.vim/bundle/Vundle.vim
-````
- ### 2. Copy the .vimrc file
- ```sh
-cp .vimrc ~/.vimrc
-```
-## Installation
-
-### 1. Copy the .vimrc file
-```sh
-cp .vimrc ~/.vimrc
-```
-### 2. Install Plugins
-```sh
-$ ./setup.sh
+git clone https://github.com/shirzady1934/vimrc ~/vimrc
+cd ~/vimrc
+./setup.sh
 ```
 
-
-
-## Plugin List
-
-| Category | Plugins |
-|----------|---------|
-| Core | VundleVim/Vundle.vim |
-| UI / Navigation | preservim/nerdtree, kien/ctrlp.vim, pseewald/vim-anyfold |
-| Completion / Linting | ycm-core/YouCompleteMe, dense-analysis/ale, fatih/vim-go |
-| Snippets | SirVer/ultisnips, honza/vim-snippets |
+`setup.sh` installs Vim (with Python 3), build deps, Vundle, all plugins,
+YouCompleteMe (with Go / Rust / TS, optionally Java), and the external
+tools listed below.
 
 ---
 
-## Requirements
+## External tools installed by setup.sh
 
-### External Tools
-- gopls  
-- goimports  
-- staticcheck  
-- flake8  
-- black  
-- isort  
+| Tool | Purpose |
+|---|---|
+| `gopls`, `goimports`, `staticcheck` | Go LSP, formatter, linter |
+| `flake8`, `black`, `isort` | Python linter / formatter / import sorter |
+| `yamllint` | YAML linter |
+| `kubeconform` | Fast K8s manifest validator |
+| `hadolint` | Dockerfile linter |
+| `shellcheck` | Shell script linter |
+| `shfmt` | Shell script formatter |
+| OpenJDK 17+ (optional) | Enables YCM Java completer |
 
-### YouCompleteMe
-YouCompleteMe requires compilation. Follow the official installation instructions in its repository.
+### Supported package managers
+
+- Linux: `apt` (Debian/Ubuntu), `dnf` (Fedora/RHEL)
+- macOS: `brew`
+
+### PEP 668
+
+On Ubuntu 24+ / Fedora 39+, system Python is externally managed.
+`setup.sh` prefers `pipx` for CLI tools (`flake8`, `black`, `isort`,
+`yamllint`) and falls back to `pip --user --break-system-packages`
+when `pipx` isn't available.
 
 ---
 
 ## Notes
 
-- Optimized for terminal Vim with a clean and minimal layout.
-- Provides strong navigation, formatting, and linting defaults.
-- Works reliably across Linux, macOS, and remote SSH development environments.
-
+- Optimized for terminal Vim; works over SSH (clipboard works with
+  `+clipboard` build).
+- ALE runs on save only — no flicker on every keystroke.
+- YouCompleteMe diagnostics are off; ALE is the single source of truth
+  for lint messages.
+- The `colorscheme` is `desert` (built-in). Swap to taste.

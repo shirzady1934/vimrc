@@ -1,37 +1,44 @@
 " ---------------------------------
-" Vundle Setup
+" vim-plug setup (auto-bootstraps if missing)
 " ---------------------------------
 set nocompatible
 filetype off
-set rtp+=~/.vim/bundle/Vundle.vim
-call vundle#begin()
 
-" Core
-Plugin 'VundleVim/Vundle.vim'
+if empty(glob('~/.vim/autoload/plug.vim'))
+  silent !curl -fLo ~/.vim/autoload/plug.vim --create-dirs
+        \ https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
+  autocmd VimEnter * PlugInstall --sync | source $MYVIMRC
+endif
 
-" UI & navigation
-Plugin 'preservim/nerdtree'
-Plugin 'kien/ctrlp.vim'
-Plugin 'pseewald/vim-anyfold'
+call plug#begin('~/.vim/plugged')
+
+" UI & navigation (lazy-load NERDTree until its command is called)
+Plug 'preservim/nerdtree',  { 'on': ['NERDTreeToggle', 'NERDTree'] }
+Plug 'kien/ctrlp.vim',      { 'on': ['CtrlP', 'CtrlPBuffer', 'CtrlPMRU'] }
+Plug 'pseewald/vim-anyfold'
 
 " Completion, linting, language tooling
-Plugin 'ycm-core/YouCompleteMe'
-Plugin 'dense-analysis/ale'
-Plugin 'fatih/vim-go'
+Plug 'ycm-core/YouCompleteMe'
+Plug 'dense-analysis/ale'
+Plug 'fatih/vim-go',        { 'for': 'go' }
 
 " Snippets
-Plugin 'SirVer/ultisnips'
-Plugin 'honza/vim-snippets'
+Plug 'SirVer/ultisnips'
+Plug 'honza/vim-snippets'
 
 " YAML / Kubernetes
-Plugin 'stephpy/vim-yaml'
-Plugin 'andrewstuart/vim-kubernetes'
+Plug 'stephpy/vim-yaml',           { 'for': ['yaml', 'yml'] }
+Plug 'andrewstuart/vim-kubernetes', { 'for': ['yaml', 'yml'] }
 
-" Docker (Dockerfile + docker-compose)
-Plugin 'ekalinin/Dockerfile.vim'
+" Docker
+Plug 'ekalinin/Dockerfile.vim'
 
-call vundle#end()
-filetype plugin indent on
+call plug#end()
+
+" ---------------------------------
+" Leader (must come before any <leader> mapping)
+" ---------------------------------
+let mapleader = " "
 
 " ---------------------------------
 " General Settings
@@ -45,19 +52,59 @@ syntax on
 colorscheme desert
 
 " ---------------------------------
+" Editor UX
+" ---------------------------------
+set mouse=a
+set clipboard=unnamedplus
+set ignorecase smartcase incsearch hlsearch
+set hidden
+set splitbelow splitright
+set scrolloff=8 sidescrolloff=8
+set wildmenu wildmode=longest:full,full
+set list listchars=tab:→\ ,trail:·,nbsp:␣
+
+" Persistent undo across sessions
+set undofile
+set undodir=~/.vim/undo
+if !isdirectory(expand('~/.vim/undo'))
+  call mkdir(expand('~/.vim/undo'), 'p')
+endif
+
+" ---------------------------------
 " Folding
 " ---------------------------------
-autocmd FileType * AnyFoldActivate
+" anyfold can be slow on huge files — skip it past 5k lines
+function! s:MaybeAnyFold() abort
+  if line('$') < 5000 && exists(':AnyFoldActivate')
+    AnyFoldActivate
+  endif
+endfunction
+autocmd FileType * call s:MaybeAnyFold()
 set foldlevel=99
-let g:EclimCompletionMethod = 'omnifunc'
 
 " ---------------------------------
 " File tree (NERDTree)
 " ---------------------------------
 nnoremap <C-n> :NERDTreeToggle<CR>
+
+" Open NERDTree on bare `vim` (no args, not piped via stdin).
+" Wrapped in a function because vim-plug's lazy-load hook consumes
+" the rest of the line, breaking a single-line `if ... | endif`.
+function! s:NERDTreeOnEmpty() abort
+  if argc() == 0 && !exists('s:std_in')
+    NERDTree
+  endif
+endfunction
 autocmd StdinReadPre * let s:std_in=1
-autocmd VimEnter * if argc() == 0 && !exists("s:std_in") | NERDTree | endif
-autocmd BufEnter * if winnr('$')==1 && exists('b:NERDTree') && b:NERDTree.isTabTree() | quit | endif
+autocmd VimEnter * call s:NERDTreeOnEmpty()
+
+" Close Vim if the only window left is a NERDTree tab.
+function! s:CloseIfOnlyNERDTree() abort
+  if winnr('$') == 1 && exists('b:NERDTree') && b:NERDTree.isTabTree()
+    quit
+  endif
+endfunction
+autocmd BufEnter * call s:CloseIfOnlyNERDTree()
 
 " ---------------------------------
 " Completion UX (all languages)
@@ -66,7 +113,6 @@ set completeopt=menu,menuone,noselect
 set shortmess+=c
 inoremap <expr> <Tab>   pumvisible() ? "\<C-n>" : "\<Tab>"
 inoremap <expr> <S-Tab> pumvisible() ? "\<C-p>" : "\<S-Tab>"
-silent! iunmap <CR>
 if exists('*complete_info')
   inoremap <expr> <CR> pumvisible()
         \ ? (complete_info().selected == -1 ? "\<C-e>\<CR>" : "\<C-y>")

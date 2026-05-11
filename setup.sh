@@ -1,190 +1,300 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "==> Detecting package manager..."
+# --------------------------------------------
+# vimrc bootstrap
+# Installs Vim, vim-plug, YouCompleteMe, plus language tools:
+# gopls / staticcheck / goimports, flake8 / black / isort,
+# yamllint, kubeconform, hadolint, shellcheck, shfmt.
+# Supports: apt (Debian/Ubuntu), dnf (Fedora/RHEL), brew (macOS).
+# --------------------------------------------
+
+msg()  { printf '==> %s\n' "$*"; }
+warn() { printf '[WARN] %s\n' "$*" >&2; }
+err()  { printf '[ERR] %s\n' "$*" >&2; }
+have() { command -v "$1" >/dev/null 2>&1; }
+
+OS="$(uname -s)"
 PKG=""
-if command -v dnf >/dev/null 2>&1; then
-  PKG="dnf"
-elif command -v apt-get >/dev/null 2>&1; then
-  PKG="apt"
-else
-  echo "Unsupported distro (needs dnf or apt). Exiting." >&2
-  exit 1
-fi
+SUDO="sudo"
 
-echo "==> Installing Vim (+python3) and build deps..."
-if [ "$PKG" = "dnf" ]; then
-  sudo dnf install -y vim-enhanced gcc-c++ make cmake python3-devel git curl
-elif [ "$PKG" = "apt" ]; then
-  sudo apt-get update
-  sudo apt-get install -y vim git curl build-essential cmake python3-dev
-fi
+# --- detect package manager ---
+case "$OS" in
+  Linux)
+    if have dnf; then
+      PKG="dnf"
+    elif have apt-get; then
+      PKG="apt"
+    else
+      err "Unsupported Linux package manager (need dnf or apt)."
+      exit 1
+    fi
+    ;;
+  Darwin)
+    if ! have brew; then
+      msg "Installing Homebrew..."
+      /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+    fi
+    PKG="brew"
+    SUDO=""  # brew refuses to run under sudo
+    ;;
+  *)
+    err "Unsupported OS: $OS"
+    exit 1
+    ;;
+esac
+msg "Detected package manager: $PKG"
 
-echo "==> Ensuring Vundle is installed..."
-if [ ! -d "$HOME/.vim/bundle/Vundle.vim" ]; then
-  git clone https://github.com/VundleVim/Vundle.vim.git "$HOME/.vim/bundle/Vundle.vim"
-else
-  (cd "$HOME/.vim/bundle/Vundle.vim" && git pull --ff-only || true)
-fi
+# --- platform helpers ---
+arch_pkg() {
+  # Normalize arch to common release-asset names.
+  # $1: scheme — "amd64" (Go-style) or "x86_64" (raw)
+  local raw scheme="${1:-amd64}"
+  raw="$(uname -m)"
+  case "$scheme:$raw" in
+    amd64:x86_64|amd64:amd64) echo "amd64" ;;
+    amd64:aarch64|amd64:arm64) echo "arm64" ;;
+    x86_64:x86_64|x86_64:amd64) echo "x86_64" ;;
+    x86_64:aarch64|x86_64:arm64) echo "arm64" ;;
+    *) echo "$raw" ;;
+  esac
+}
+os_lower() { uname -s | tr '[:upper:]' '[:lower:]'; }
 
-cp .vimrc "$HOME/.vimrc"
+# --- install base packages ---
+install_base() {
+  msg "Installing Vim and build deps..."
+  case "$PKG" in
+    dnf)
+      $SUDO dnf install -y vim-enhanced gcc-c++ make cmake python3-devel git curl
+      ;;
+    apt)
+      $SUDO apt-get update
+      $SUDO apt-get install -y vim git curl build-essential cmake python3-dev python3-pip pipx
+      ;;
+    brew)
+      brew install vim git curl cmake python pipx
+      ;;
+  esac
+}
 
-echo "==> Installing plugins with Vundle..."
-vim +PluginInstall +qall || true
-
-echo "==> Installing Java 17 (required by YCM jdt.ls for Java support)..."
-if ! command -v java >/dev/null 2>&1 || ! java -version 2>&1 | grep -q 'version "17\|version "2[0-9]'; then
-  if [ "$PKG" = "dnf" ]; then
-    sudo dnf install -y java-17-openjdk-devel || echo "  WARNING: java-17 install failed; Java completion will be skipped."
-  elif [ "$PKG" = "apt" ]; then
-    sudo apt-get install -y openjdk-17-jdk || echo "  WARNING: java-17 install failed; Java completion will be skipped."
+# --- vim-plug ---
+install_vim_plug() {
+  if [ ! -f "$HOME/.vim/autoload/plug.vim" ]; then
+    msg "Installing vim-plug..."
+    curl -fsSLo "$HOME/.vim/autoload/plug.vim" --create-dirs \
+      https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
+  else
+    msg "vim-plug already installed"
   fi
-else
-  echo "  Java already available: $(java -version 2>&1 | head -1)"
-fi
+}
 
-echo "==> Building YouCompleteMe..."
-cd "$HOME/.vim/bundle/YouCompleteMe"
-git submodule update --init --recursive
-git clean -xfd
+# --- copy .vimrc with backup ---
+install_vimrc() {
+  local src
+  src="$(cd "$(dirname "$0")" && pwd)/.vimrc"
+  if [ ! -f "$src" ]; then
+    err "No .vimrc found next to setup.sh"
+    return 1
+  fi
+  if [ -f "$HOME/.vimrc" ] && [ ! -L "$HOME/.vimrc" ]; then
+    cp "$HOME/.vimrc" "$HOME/.vimrc.bak.$(date +%s)"
+    msg "Backed up existing ~/.vimrc"
+  fi
+  cp "$src" "$HOME/.vimrc"
+  msg "Installed ~/.vimrc"
+}
 
-# Build flags — add --java-completer only when java 17+ is present
-YCM_FLAGS="--go-completer --rust-completer --ts-completer"
-if command -v java >/dev/null 2>&1 && java -version 2>&1 | grep -qE 'version "1[7-9]|version "2[0-9]'; then
-  YCM_FLAGS="$YCM_FLAGS --java-completer"
-  echo "  Java 17+ found — including Java completer."
-else
-  echo "  Java 17+ not found — skipping Java completer."
-fi
+# --- Java for YCM jdt.ls (optional) ---
+install_java() {
+  if have java && java -version 2>&1 | grep -qE 'version "1[7-9]|version "2[0-9]'; then
+    msg "Java already available: $(java -version 2>&1 | head -1)"
+    return
+  fi
+  msg "Installing OpenJDK 17 (for YCM Java completer)..."
+  case "$PKG" in
+    dnf)  $SUDO dnf install -y java-17-openjdk-devel || warn "Java install failed; Java completion will be skipped." ;;
+    apt)  $SUDO apt-get install -y openjdk-17-jdk      || warn "Java install failed; Java completion will be skipped." ;;
+    brew) brew install --cask temurin@17                || warn "Java install failed; Java completion will be skipped." ;;
+  esac
+}
 
-python3 install.py $YCM_FLAGS
+# --- install all plugins via vim-plug ---
+install_plugins() {
+  msg "Installing plugins via vim-plug..."
+  vim +'PlugInstall --sync' +qall || true
+}
 
-echo "==> Installing Go tools (gopls, goimports, staticcheck)..."
-if command -v go >/dev/null 2>&1; then
+# --- YouCompleteMe build (separate step — flags depend on Java availability) ---
+build_ycm() {
+  local ycm_dir="$HOME/.vim/plugged/YouCompleteMe"
+  if [ ! -d "$ycm_dir" ]; then
+    warn "YouCompleteMe not installed by vim-plug; skipping build."
+    return
+  fi
+  msg "Building YouCompleteMe..."
+  cd "$ycm_dir"
+  git submodule update --init --recursive
+  git clean -xfd
+
+  local ycm_flags="--go-completer --rust-completer --ts-completer"
+  if have java && java -version 2>&1 | grep -qE 'version "1[7-9]|version "2[0-9]'; then
+    ycm_flags="$ycm_flags --java-completer"
+    msg "  Java 17+ found — including Java completer."
+  else
+    msg "  Java 17+ not found — skipping Java completer."
+  fi
+  python3 install.py $ycm_flags
+}
+
+# --- Go tools ---
+install_go_tools() {
+  if ! have go; then
+    warn "Go not found; skipping gopls/goimports/staticcheck."
+    return
+  fi
+  msg "Installing Go tools (gopls, goimports, staticcheck)..."
   go install golang.org/x/tools/gopls@latest
   go install golang.org/x/tools/cmd/goimports@latest
   go install honnef.co/go/tools/cmd/staticcheck@latest
-  if ! grep -q 'GOPATH' "$HOME/.bashrc" 2>/dev/null; then
-    echo 'export GOPATH="${GOPATH:-$HOME/go}"' >> "$HOME/.bashrc"
-    echo 'export PATH="$GOPATH/bin:$PATH"' >> "$HOME/.bashrc"
+}
+
+# --- Python tools (PEP 668-safe) ---
+# Prefers pipx (recommended for CLI tools), falls back to pip --user,
+# and last-resort --break-system-packages.
+install_py_tool() {
+  local tool="$1"
+  if have "$tool"; then
+    msg "  $tool already installed"
+    return
   fi
-else
-  echo "Go not found; skipping Go tools. Install Go and rerun those lines." >&2
-fi
-
-echo "==> Installing Python linters/formatters (flake8, black, isort)..."
-if command -v pip >/dev/null 2>&1; then
-  pip install --user flake8 black isort || true
-elif command -v pip3 >/dev/null 2>&1; then
-  pip3 install --user flake8 black isort || true
-else
-  echo "pip not found; skipping Python tools." >&2
-fi
-
-# ---------------------------------
-# Kubernetes tools
-# ---------------------------------
-echo "==> Installing Kubernetes tools..."
-
-# kubeconform — fast K8s manifest validator
-if ! command -v kubeconform >/dev/null 2>&1; then
-  KCONF_VER=$(curl -s https://api.github.com/repos/yannh/kubeconform/releases/latest \
-    | grep '"tag_name"' | cut -d'"' -f4)
-  ARCH=$(uname -m)
-  case "$ARCH" in
-    x86_64)  ARCH="amd64" ;;
-    aarch64) ARCH="arm64" ;;
-  esac
-  OS=$(uname -s | tr '[:upper:]' '[:lower:]')
-  curl -sL "https://github.com/yannh/kubeconform/releases/download/${KCONF_VER}/kubeconform-${OS}-${ARCH}.tar.gz" \
-    | tar -xz -C /tmp kubeconform
-  sudo mv /tmp/kubeconform /usr/local/bin/kubeconform
-  echo "  kubeconform ${KCONF_VER} installed."
-else
-  echo "  kubeconform already installed: $(kubeconform -v 2>&1 | head -1)"
-fi
-
-# yamllint — YAML linter (used by ALE for all YAML files)
-echo "==> Installing yamllint..."
-if command -v pip3 >/dev/null 2>&1; then
-  pip3 install --user yamllint || true
-elif command -v pip >/dev/null 2>&1; then
-  pip install --user yamllint || true
-else
-  echo "  pip not found; skipping yamllint." >&2
-fi
-
-# ---------------------------------
-# Docker tools
-# ---------------------------------
-echo "==> Installing hadolint (Dockerfile linter)..."
-if ! command -v hadolint >/dev/null 2>&1; then
-  HADOLINT_VER=$(curl -s https://api.github.com/repos/hadolint/hadolint/releases/latest \
-    | grep '"tag_name"' | cut -d'"' -f4)
-  ARCH=$(uname -m)
-  case "$ARCH" in
-    x86_64)  ARCH="x86_64" ;;
-    aarch64) ARCH="arm64"  ;;
-  esac
-  OS=$(uname -s)
-  curl -sL "https://github.com/hadolint/hadolint/releases/download/${HADOLINT_VER}/hadolint-${OS}-${ARCH}" \
-    -o /tmp/hadolint
-  chmod +x /tmp/hadolint
-  sudo mv /tmp/hadolint /usr/local/bin/hadolint
-  echo "  hadolint ${HADOLINT_VER} installed."
-else
-  echo "  hadolint already installed: $(hadolint --version 2>&1 | head -1)"
-fi
-
-# ---------------------------------
-# Shell tools
-# ---------------------------------
-echo "==> Installing shellcheck..."
-if ! command -v shellcheck >/dev/null 2>&1; then
-  if [ "$PKG" = "dnf" ]; then
-    sudo dnf install -y shellcheck
-  elif [ "$PKG" = "apt" ]; then
-    sudo apt-get install -y shellcheck
+  if have pipx; then
+    pipx install "$tool" >/dev/null 2>&1 && { msg "  $tool installed via pipx"; return; }
   fi
-else
-  echo "  shellcheck already installed: $(shellcheck --version | head -2 | tail -1)"
-fi
-
-echo "==> Installing shfmt (shell formatter)..."
-if ! command -v shfmt >/dev/null 2>&1; then
-  if command -v go >/dev/null 2>&1; then
-    go install mvdan.cc/sh/v3/cmd/shfmt@latest
+  local pip
+  pip="$(command -v pip3 || command -v pip || true)"
+  if [ -z "$pip" ]; then
+    warn "  Neither pipx nor pip found; skipping $tool."
+    return
+  fi
+  if "$pip" install --user "$tool" >/dev/null 2>&1; then
+    msg "  $tool installed via $pip --user"
+  elif "$pip" install --user --break-system-packages "$tool" >/dev/null 2>&1; then
+    msg "  $tool installed via $pip --user --break-system-packages"
   else
-    SHFMT_VER=$(curl -s https://api.github.com/repos/mvdan/sh/releases/latest \
-      | grep '"tag_name"' | cut -d'"' -f4)
-    ARCH=$(uname -m)
-    case "$ARCH" in
-      x86_64)  ARCH="amd64" ;;
-      aarch64) ARCH="arm64" ;;
-    esac
-    OS=$(uname -s | tr '[:upper:]' '[:lower:]')
-    curl -sL "https://github.com/mvdan/sh/releases/download/${SHFMT_VER}/shfmt_${SHFMT_VER}_${OS}_${ARCH}" \
-      -o /tmp/shfmt
-    chmod +x /tmp/shfmt
-    sudo mv /tmp/shfmt /usr/local/bin/shfmt
-    echo "  shfmt ${SHFMT_VER} installed."
+    warn "  Failed to install $tool"
   fi
-else
-  echo "  shfmt already installed: $(shfmt --version)"
-fi
+}
 
-echo
-echo "All set! Open Vim and check:"
-echo "  :echo exists(':YcmRestartServer')   (should be 2)"
-echo "  :ALEInfo                             (should list active linters)"
-echo
-echo "K8s keybindings (inside any .yaml/.yml file):"
-echo "  <leader>ka  kubectl apply -f %"
-echo "  <leader>kd  kubectl delete -f %"
-echo "  <leader>kD  kubectl apply --dry-run=server -f %"
-echo "  <leader>kv  kubeconform -strict -summary %"
-echo "  <leader>ke  kubectl explain <word-under-cursor>"
-echo
-echo "Shell keybindings (inside .sh/.bash files):"
-echo "  <leader>sr  run script with bash"
-echo "  <leader>sc  shellcheck current file"
+install_python_tools() {
+  msg "Installing Python linters/formatters..."
+  install_py_tool flake8
+  install_py_tool black
+  install_py_tool isort
+  install_py_tool yamllint
+}
+
+# --- kubeconform ---
+install_kubeconform() {
+  if have kubeconform; then
+    msg "kubeconform already installed: $(kubeconform -v 2>&1 | head -1)"
+    return
+  fi
+  msg "Installing kubeconform..."
+  local ver os arch
+  ver="$(curl -fsSL -o /dev/null -w '%{url_effective}' https://github.com/yannh/kubeconform/releases/latest | sed 's@.*/@@')"
+  os="$(os_lower)"
+  arch="$(arch_pkg amd64)"
+  curl -fsSL "https://github.com/yannh/kubeconform/releases/download/${ver}/kubeconform-${os}-${arch}.tar.gz" \
+    | tar -xz -C /tmp kubeconform
+  $SUDO mv /tmp/kubeconform /usr/local/bin/kubeconform
+  msg "  kubeconform ${ver} installed."
+}
+
+# --- hadolint ---
+install_hadolint() {
+  if have hadolint; then
+    msg "hadolint already installed: $(hadolint --version 2>&1 | head -1)"
+    return
+  fi
+  msg "Installing hadolint..."
+  local ver os arch
+  ver="$(curl -fsSL -o /dev/null -w '%{url_effective}' https://github.com/hadolint/hadolint/releases/latest | sed 's@.*/@@')"
+  os="$(uname -s)"
+  arch="$(arch_pkg x86_64)"
+  curl -fsSL "https://github.com/hadolint/hadolint/releases/download/${ver}/hadolint-${os}-${arch}" -o /tmp/hadolint
+  chmod +x /tmp/hadolint
+  $SUDO mv /tmp/hadolint /usr/local/bin/hadolint
+  msg "  hadolint ${ver} installed."
+}
+
+# --- shellcheck ---
+install_shellcheck() {
+  if have shellcheck; then
+    msg "shellcheck already installed: $(shellcheck --version | head -2 | tail -1)"
+    return
+  fi
+  msg "Installing shellcheck..."
+  case "$PKG" in
+    dnf)  $SUDO dnf install -y ShellCheck || $SUDO dnf install -y shellcheck ;;
+    apt)  $SUDO apt-get install -y shellcheck ;;
+    brew) brew install shellcheck ;;
+  esac
+}
+
+# --- shfmt ---
+install_shfmt() {
+  if have shfmt; then
+    msg "shfmt already installed: $(shfmt --version)"
+    return
+  fi
+  msg "Installing shfmt..."
+  if [ "$PKG" = "brew" ]; then
+    brew install shfmt
+    return
+  fi
+  if have go; then
+    go install mvdan.cc/sh/v3/cmd/shfmt@latest
+    return
+  fi
+  local ver os arch
+  ver="$(curl -fsSL -o /dev/null -w '%{url_effective}' https://github.com/mvdan/sh/releases/latest | sed 's@.*/@@')"
+  os="$(os_lower)"
+  arch="$(arch_pkg amd64)"
+  curl -fsSL "https://github.com/mvdan/sh/releases/download/${ver}/shfmt_${ver}_${os}_${arch}" -o /tmp/shfmt
+  chmod +x /tmp/shfmt
+  $SUDO mv /tmp/shfmt /usr/local/bin/shfmt
+  msg "  shfmt ${ver} installed."
+}
+
+# --- main ---
+install_base
+install_vimrc
+install_vim_plug
+install_java
+install_plugins
+build_ycm
+install_go_tools
+install_python_tools
+install_kubeconform
+install_hadolint
+install_shellcheck
+install_shfmt
+
+cat <<'EOF'
+
+All set! Open Vim and verify:
+  :echo exists(':YcmRestartServer')   (should be 2)
+  :ALEInfo                            (should list active linters)
+
+K8s keybindings (inside any .yaml/.yml file):
+  <leader>ka  kubectl apply -f %
+  <leader>kd  kubectl delete -f %
+  <leader>kD  kubectl apply --dry-run=server -f %
+  <leader>kv  kubeconform -strict -summary %
+  <leader>ke  kubectl explain <word-under-cursor>
+
+Shell keybindings (inside .sh/.bash files):
+  <leader>sr  run script with bash
+  <leader>sc  shellcheck current file
+EOF
