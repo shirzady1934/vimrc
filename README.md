@@ -109,6 +109,17 @@ Lazy-loaded — the plugin is only pulled in once you invoke one of those comman
 
 Indent-based folding is auto-activated per buffer, but skipped on files longer than 5,000 lines for performance. `foldlevel=99` keeps everything open by default.
 
+### Git (tig-explorer)
+| Key | Action |
+|---|---|
+| `<leader>gt` | `:TigOpenCurrentFile` — tig focused on the current file |
+| `<leader>gp` | `:TigOpenProjectRootDir` — tig at the project root |
+| `<leader>gs` | `:TigStatus` — tig status view |
+| `<leader>gb` | `:TigBlame` — blame current file |
+| `<leader>gg` | `:TigGrep` — git grep (prompts for pattern) |
+
+Inside tig, pressing Enter on a file opens it back in Vim at the right line.
+
 ### Snippets (UltiSnips)
 | Key | Action |
 |---|---|
@@ -138,6 +149,8 @@ Triggers are deliberately off `<Tab>` so they don't conflict with the completion
 |           | stephpy/vim-yaml | `for: yaml` |
 |           | andrewstuart/vim-kubernetes | `for: yaml` |
 |           | ekalinin/Dockerfile.vim | eager |
+| Git | iberianpig/tig-explorer.vim | eager |
+|     | rbgrouleff/bclose.vim (dep) | eager |
 | Snippets | SirVer/ultisnips, honza/vim-snippets | eager |
 
 ---
@@ -167,6 +180,7 @@ tools listed below.
 | `hadolint` | Dockerfile linter |
 | `shellcheck` | Shell script linter |
 | `shfmt` | Shell script formatter |
+| `tig` | Text-mode git interface used by tig-explorer.vim |
 | OpenJDK 17+ (optional) | Enables YCM Java completer |
 
 ### Supported package managers

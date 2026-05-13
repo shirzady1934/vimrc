@@ -33,6 +33,10 @@ Plug 'andrewstuart/vim-kubernetes', { 'for': ['yaml', 'yml'] }
 " Docker
 Plug 'ekalinin/Dockerfile.vim'
 
+" Git (tig TUI integrated with Vim — :Tig, :TigBlame, :TigStatus, ...)
+Plug 'rbgrouleff/bclose.vim'
+Plug 'iberianpig/tig-explorer.vim'
+
 call plug#end()
 
 " ---------------------------------
@@ -290,6 +294,20 @@ augroup END
 if executable('pyenv')
   let g:python3_host_prog = trim(system('pyenv which python3'))
 endif
+
+" ---------------------------------
+" tig-explorer (Git TUI)
+" ---------------------------------
+" <leader>gt  — tig on current file
+" <leader>gp  — tig at project root
+" <leader>gs  — tig status view
+" <leader>gb  — tig blame on current file
+" <leader>gg  — tig grep (prompts for pattern)
+nnoremap <silent> <leader>gt :TigOpenCurrentFile<CR>
+nnoremap <silent> <leader>gp :TigOpenProjectRootDir<CR>
+nnoremap <silent> <leader>gs :TigStatus<CR>
+nnoremap <silent> <leader>gb :TigBlame<CR>
+nnoremap <silent> <leader>gg :TigGrep<CR>
 
 " ---------------------------------
 " UltiSnips triggers (avoid Tab conflict)

@@ -5,7 +5,7 @@ set -euo pipefail
 # vimrc bootstrap
 # Installs Vim, vim-plug, YouCompleteMe, plus language tools:
 # gopls / staticcheck / goimports, flake8 / black / isort,
-# yamllint, kubeconform, hadolint, shellcheck, shfmt.
+# yamllint, kubeconform, hadolint, shellcheck, shfmt, tig.
 # Supports: apt (Debian/Ubuntu), dnf (Fedora/RHEL), brew (macOS).
 # --------------------------------------------
 
@@ -242,6 +242,20 @@ install_shellcheck() {
   esac
 }
 
+# --- tig (text-mode git interface, used by tig-explorer.vim) ---
+install_tig() {
+  if have tig; then
+    msg "tig already installed: $(tig --version | head -1)"
+    return
+  fi
+  msg "Installing tig..."
+  case "$PKG" in
+    dnf)  $SUDO dnf install -y tig ;;
+    apt)  $SUDO apt-get install -y tig ;;
+    brew) brew install tig ;;
+  esac
+}
+
 # --- shfmt ---
 install_shfmt() {
   if have shfmt; then
@@ -280,6 +294,7 @@ install_kubeconform
 install_hadolint
 install_shellcheck
 install_shfmt
+install_tig
 
 cat <<'EOF'
 
