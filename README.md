@@ -44,7 +44,7 @@ completion; ALE handles linting and formatting on save.
 - 2-space indent auto-applied to YAML.
 - `termguicolors` when supported.
 - Resize splits with `Ctrl + Arrow keys`.
-- Persistent undo, mouse, system clipboard, smart search.
+- Persistent undo, system clipboard, smart search.
 - Statusline-based dashed window separators.
 
 ---
@@ -83,10 +83,43 @@ Default `<leader>` is `<Space>`.
 | `gr` | `YcmCompleter GoToReferences` |
 | `K` | `YcmCompleter GetDoc` |
 
+### NERDTree (file tree)
+| Key | Action |
+|---|---|
+| `<C-n>` | toggle the tree |
+| `:NERDTree` | open the tree explicitly |
+
+Auto-opens when you launch `vim` with no file argument, and Vim quits if NERDTree is the only window left.
+
+### CtrlP (fuzzy finder)
+| Command | Action |
+|---|---|
+| `:CtrlP` | fuzzy-find a file in the project |
+| `:CtrlPBuffer` | fuzzy-find an open buffer |
+| `:CtrlPMRU` | fuzzy-find a recently-used file |
+
+Lazy-loaded — the plugin is only pulled in once you invoke one of those commands.
+
+### Folding (vim-anyfold)
+| Key | Action |
+|---|---|
+| `za` | toggle fold under cursor |
+| `zo` / `zc` | open / close fold |
+| `zR` / `zM` | open / close all folds |
+
+Indent-based folding is auto-activated per buffer, but skipped on files longer than 5,000 lines for performance. `foldlevel=99` keeps everything open by default.
+
+### Snippets (UltiSnips)
+| Key | Action |
+|---|---|
+| `<C-j>` | expand snippet / jump to next placeholder |
+| `<C-k>` | jump to previous placeholder |
+
+Triggers are deliberately off `<Tab>` so they don't conflict with the completion menu.
+
 ### Splits / windows
 | Key | Action |
 |---|---|
-| `<C-n>` | toggle NERDTree |
 | `<C-Up>` / `<C-Down>` | shrink / grow horizontal |
 | `<C-Left>` / `<C-Right>` | shrink / grow vertical |
 
