@@ -54,7 +54,6 @@ colorscheme desert
 " ---------------------------------
 " Editor UX
 " ---------------------------------
-set mouse=a
 set clipboard=unnamedplus
 set ignorecase smartcase incsearch hlsearch
 set hidden
